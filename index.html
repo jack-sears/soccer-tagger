@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soccer Event Tagger</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <h1>Soccer Event Tagger</h1>
+
+    <div class="container">
+        <!-- Left: Video Upload + Video + Event Preview -->
+        <div class="video-section">
+            <input type="file" id="videoUpload" accept="video/mp4,video/quicktime" />
+            <video id="gameVideo" controls></video>
+            <!-- Event preview table will be appended dynamically here -->
+            <div class="event-table-container">
+                <table id="eventTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Player</th>
+                            <th>Event</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Outcome</th>
+                            <th>Possession</th>
+                            <th>Time</th>
+                            <th>Delete</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <!-- Rows get added here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Right: Controls + Pitch -->
+        <div class="tagging-section">
+            <button id="openLineupModal">Edit Lineup</button>
+
+            <!-- Lineup modal -->
+            <div id="lineupModal" class="modal">
+                <div class="modal-content">
+                    <span class="close">&times;</span>
+                    <h2>Team Lineup</h2>
+                    <div id="lineupInputs"></div>
+                    <button id="saveLineup">Save Lineup</button>
+                </div>
+            </div>
+
+            <input type="text" id="playerInput" placeholder="Player # or name" list="playerList" />
+            <datalist id="playerList"></datalist>
+        
+            <div class="controls">
+              <label>Event Type:</label>
+              <div class="event-buttons">
+                <button class="event-btn" data-event="Pass">Pass</button>
+                <button class="event-btn" data-event="Clearance">Clearance</button>
+                <button class="event-btn" data-event="Shot">Shot</button>
+              </div>
+
+              <label>Outcome:</label>
+              <div class="outcome-buttons">
+                <button class="outcome-btn" data-outcome="Success">Success</button>
+                <button class="outcome-btn" data-outcome="Unsuccessful">Unsuccessful</button>
+              </div>
+
+              <label>Possession Type:</label>
+              <div class="possession-buttons">
+                <button class="possession-btn" data-possession="">Open Play</button>
+                <button class="possession-btn" data-possession="Throw-in">Throw-in</button>
+                <button class="possession-btn" data-possession="Corner">Corner</button>
+                <button class="possession-btn" data-possession="Free-kick">Free-kick</button>
+              </div>
+
+              <button id="addEvent">Add Event</button>
+              <button id="exportCSV">Export CSV</button>
+            </div>
+
+            <!-- Pitch Canvas -->
+            <div class="pitch-section">
+              <canvas id="pitchCanvas" width="600" height="400"></canvas>
+              <div id="coordsDisplay" style="margin-top:5px; font-size:14px; color:#333; width:140px; display:inline-block;"> X: –, Y: – </div>
+            </div>
+        </div>
+    </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
