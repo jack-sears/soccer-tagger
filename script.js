@@ -22,6 +22,10 @@ let lineup = [];
 let selectedEvent = null;
 let selectedOutcome = null;
 let selectedPossession = "";
+let selectedBodyPart = "";
+
+let pitchWidth = 110;  // meters
+let pitchHeight = 75;  // meters
 
 // --- Video Upload ---
 videoUpload.addEventListener("change", (e) => {
@@ -29,21 +33,102 @@ videoUpload.addEventListener("change", (e) => {
   if (file) video.src = URL.createObjectURL(file);
 });
 
+// --- Skip Forward ---
+
+document.addEventListener("keydown", (e) => {
+  const skipAmount = e.shiftKey ? 10 : 5; // hold SHIFT to skip 10s instead of 5s
+  if (e.code === "ArrowRight") {
+    video.currentTime = Math.min(video.duration, video.currentTime + skipAmount);
+  } else if (e.code === "ArrowLeft") {
+    video.currentTime = Math.max(0, video.currentTime - skipAmount);
+  } else if (e.code === "Space") {
+    e.preventDefault();
+    if (video.paused) video.play();
+    else video.pause();
+  }
+});
+
 // --- Draw pitch ---
 function drawPitch() {
+  const w = canvas.width;
+  const h = canvas.height;
+  const ctx = canvas.getContext("2d");
+
+  const scaleX = w / pitchWidth;
+  const scaleY = h / pitchHeight;
+
+  // Background
+  ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#007a33";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, w, h);
+
+  // Outer lines
   ctx.strokeStyle = "white";
   ctx.lineWidth = 2;
-  ctx.strokeRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeRect(0, 0, w, h);
+
+  // Halfway line
   ctx.beginPath();
-  ctx.moveTo(canvas.width / 2, 0);
-  ctx.lineTo(canvas.width / 2, canvas.height);
+  ctx.moveTo(w / 2, 0);
+  ctx.lineTo(w / 2, h);
   ctx.stroke();
+
+  // Center circle (radius scaled to pitch)
+  const centerCircleRadius = 10 * scaleX; // use width scale
   ctx.beginPath();
-  ctx.arc(canvas.width / 2, canvas.height / 2, 40, 0, 2 * Math.PI);
+  ctx.arc(w / 2, h / 2, centerCircleRadius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Penalty & 6-yard boxes (scaled)
+  const penaltyBoxWidth = 45 * scaleY;   // box vertical size (in canvas px)
+  const penaltyBoxDepth = 18 * scaleX;  // box horizontal depth (in canvas px)
+  const sixYardBoxWidth = 20 * scaleY;
+  const sixYardBoxDepth = 6 * scaleX;
+
+  // Left penalty box
+  ctx.strokeRect(0, (h - penaltyBoxWidth) / 2, penaltyBoxDepth, penaltyBoxWidth);
+  // Right penalty box
+  ctx.strokeRect(w - penaltyBoxDepth, (h - penaltyBoxWidth) / 2, penaltyBoxDepth, penaltyBoxWidth);
+  // Left 6-yard box
+  ctx.strokeRect(0, (h - sixYardBoxWidth) / 2, sixYardBoxDepth, sixYardBoxWidth);
+  // Right 6-yard box
+  ctx.strokeRect(w - sixYardBoxDepth, (h - sixYardBoxWidth) / 2, sixYardBoxDepth, sixYardBoxWidth);
+
+  // Penalty spots
+  const penaltySpotLeft = 12 * scaleX;
+  const penaltySpotRight = w - penaltySpotLeft;
+  ctx.beginPath();
+  ctx.arc(penaltySpotLeft, h / 2, 3, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(penaltySpotRight, h / 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Arcs at top of penalty area — fixed so they open toward centre
+  const arcRadius = 10 * scaleX; // same as center circle radius (9.15m)
+  // LEFT arc: opens to the RIGHT (toward center) => angles from -PI/2 to +PI/2
+  ctx.beginPath();
+  ctx.arc(penaltySpotLeft, h / 2, arcRadius, -Math.PI / 2 + Math.PI/5, Math.PI / 2 - Math.PI/5, false);
+  ctx.stroke();
+  // RIGHT arc: opens to the LEFT => angles from PI/2 to 3*PI/2
+  ctx.beginPath();
+  ctx.arc(penaltySpotRight, h / 2, arcRadius, Math.PI / 2 + Math.PI/5, (3 * Math.PI) / 2 - Math.PI/5, false);
+  ctx.stroke();
+
+  // Third lines
+  ctx.strokeStyle = "blue";
+  ctx.beginPath();
+  ctx.moveTo(w*0.6818, 0);
+  ctx.lineTo(w*0.6818, h);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(w*0.31818, 0);
+  ctx.lineTo(w*0.31818, h);
   ctx.stroke();
 }
+
 drawPitch();
 
 // --- Button selection ---
@@ -59,6 +144,7 @@ function setupButtons(className, callback) {
 setupButtons("event-btn", val => selectedEvent = val);
 setupButtons("outcome-btn", val => selectedOutcome = val);
 setupButtons("possession-btn", val => selectedPossession = val);
+setupButtons("bodypart-btn", val => selectedBodyPart = val);
 
 // --- Pitch click (store temp event) ---
 canvas.addEventListener("click", (e) => {
@@ -67,12 +153,34 @@ canvas.addEventListener("click", (e) => {
   const rect = canvas.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  const scaledX = (x / canvas.width) * 120;
-  const scaledY = (y / canvas.height) * 80;
+  const scaledX = (x / canvas.width) * pitchWidth;
+  const scaledY = (y / canvas.height) * pitchHeight;
+
+  // For single-point events, just store one click
+  if (selectedEvent === "Tackle" || selectedEvent === "Error") {
+    tempEvent = {
+      type: selectedEvent,
+      startX: scaledX,
+      startY: scaledY,
+      canvasX: x,
+      canvasY: y,
+      endX: "",
+      endY: "",
+      time: video.currentTime.toFixed(2),
+    };
+    drawMarker(x, y, "blue");
+    return;
+  }
 
   // If first click, store start coordinates
   if (!tempEvent) {
-    tempEvent = { startX: scaledX, startY: scaledY, canvasX: x, canvasY: y };
+    tempEvent = {
+      startX: scaledX,
+      startY: scaledY,
+      canvasX: x,
+      canvasY: y,
+      time: video.currentTime.toFixed(2)  
+    };
     drawMarker(x, y, "yellow");
   } else {
     // Second click sets end coordinates
@@ -97,27 +205,36 @@ function drawMarker(x, y, color) {
 
 // --- Add Event Button ---
 addEventBtn.addEventListener("click", () => {
-    if (!tempEvent) return alert("Click on the pitch to mark the event first!");
+    if ((!tempEvent) || (tempEvent.endX == undefined && (selectedEvent !== "Tackle" && selectedEvent !== "Error"))) {
+      return alert("Click on the pitch to mark the event first!");
+    }
     const player = playerInput.value || "Unknown";
   
     const event = {
       eventType: selectedEvent,
       player,
-      startX: tempEvent.startX || tempEvent.endX,
-      startY: tempEvent.startY || tempEvent.endY,
-      endX: tempEvent.endX || tempEvent.startX,
-      endY: tempEvent.endY || tempEvent.startY,
+      startX: tempEvent.startX,
+      startY: tempEvent.startY,
+      endX: tempEvent.endX,
+      endY: tempEvent.endY,
       time: video.currentTime.toFixed(2),
       outcome: selectedOutcome || "",
-      possession: selectedPossession || ""
+      possession: selectedPossession || "",
+      bodypart: selectedBodyPart || ""
     };
   
     events.push(event);
     addRowToTable(event, events.length - 1);
   
     // Clear temporary marker and redraw canvas
-    //tempEvent = null;
+    tempEvent = null;
     clearTempMarkers();
+
+    document.querySelectorAll(".active").forEach(b => b.classList.remove("active"));
+    selectedBodyPart = "";
+    selectedEvent = null;
+    selectedOutcome = null;
+    selectedPossession = "";
 });
 
 // --- Add row to table ---
@@ -132,6 +249,7 @@ function addRowToTable(event, index) {
     <td contenteditable="true">${event.endX},${event.endY}</td>
     <td contenteditable="true">${event.outcome}</td>
     <td contenteditable="true">${event.possession}</td>
+    <td contenteditable="true">${event.bodypart}</td>
     <td>${event.time}</td>
     <td><button class="deleteBtn">Delete</button></td>
   `;
@@ -159,6 +277,7 @@ function addRowToTable(event, index) {
           break;
         case 5: event.outcome = cell.textContent; break;
         case 6: event.possession = cell.textContent; break;
+        case 7: event.bodypart = cell.textContent; break;
       }
     });
   });
@@ -179,7 +298,7 @@ function updateTable() {
 // --- Export CSV ---
 exportBtn.addEventListener("click", () => {
   if (events.length === 0) return alert("No events tagged yet!");
-  const header = ["eventType","player","startX","startY","endX","endY","time","outcome","possession"];
+  const header = ["eventType","player","startX","startY","endX","endY","time","outcome","possession", "bodypart"];
   const rows = events.map(ev => header.map(h => (ev[h] !== undefined ? ev[h] : "")).join(","));
   const csv = [header.join(","), ...rows].join("\n");
 
@@ -216,12 +335,53 @@ saveLineupBtn.addEventListener("click", () => {
     if (input.value.trim() !== "") lineup.push(input.value.trim());
   });
 
+  const playerButtonsContainer = document.getElementById("playerButtons");
+
+function renderPlayerButtons() {
+  playerButtonsContainer.innerHTML = "";
+
+  lineup.forEach(player => {
+    const btn = document.createElement("button");
+    btn.textContent = player;
+    btn.className = "player-btn";
+    btn.style.padding = "6px 10px";
+    btn.style.borderRadius = "8px";
+    btn.style.border = "1px solid #ccc";
+    btn.style.cursor = "pointer";
+    btn.style.backgroundColor = "#f0f0f0";
+
+    btn.addEventListener("click", () => {
+      playerInput.value = player;
+      highlightActiveButton(player);
+    });
+
+    playerButtonsContainer.appendChild(btn);
+  });
+}
+
+function highlightActiveButton(selected) {
+  const buttons = document.querySelectorAll(".player-btn");
+  buttons.forEach(btn => {
+    if (btn.textContent === selected) {
+      btn.style.backgroundColor = "#4CAF50";
+      btn.style.color = "white";
+    } else {
+      btn.style.backgroundColor = "#f0f0f0";
+      btn.style.color = "black";
+    }
+  });
+}
+
+  // Update datalist (still useful for typing)
   playerList.innerHTML = "";
   lineup.forEach(player => {
     const option = document.createElement("option");
     option.value = player;
     playerList.appendChild(option);
   });
+
+  // Create clickable player buttons
+  renderPlayerButtons();
 
   modal.style.display = "none";
 });
@@ -239,8 +399,8 @@ const coordsDisplay = document.getElementById("coordsDisplay");
 
 canvas.addEventListener("mousemove", (e) => {
   const rect = canvas.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width) * 120; // scale to 120x80 pitch
-  const y = ((e.clientY - rect.top) / rect.height) * 80;
+  const x = ((e.clientX - rect.left) / rect.width) * pitchWidth; // scale to 120x80 pitch
+  const y = ((e.clientY - rect.top) / rect.height) * pitchHeight;
   coordsDisplay.textContent = `X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}`;
 });
 
